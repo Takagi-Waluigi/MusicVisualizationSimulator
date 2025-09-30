@@ -25,7 +25,8 @@ class ofApp : public ofBaseApp{
 		void setupGui();
 		void drawStandardSpectrum(float* fftValues,  int fftSize);
 		void drawSyncAmbientColor(float* fftValues, int fftSize);
-		ofColor calculateColor();
+		ofColor calculateColorTimeTransition(bool enableContinuousTranstion);
+		ofColor calculateColorBy2D(float* fftValues);
 		
 		ofSoundPlayer player;
 		bool isPlayingMusic = false;
@@ -44,9 +45,11 @@ class ofApp : public ofBaseApp{
 		ofParameter<int> maxValue;
 		ofParameterGroup colors;
 		std::array<ofParameter<ofColor>, 4> colorPresets;
+		ofParameter<int> colorTransitionPattern;
 		ofParameter<float> colorChangeInterval;
 		ofParameterGroup visualizationVariables;
 		ofParameter<float> offsetValue;
 		ofParameter<float> boostValue;
+		ofParameter<int> visualizationChannel;
 
 };

@@ -4,15 +4,16 @@
 void ofApp::setup(){
 	setupGui();
 
-	if (!player.loadSound("tele.mp3")) {
+	if (!player.loadSound("pho.mp3")) {
 		cout << "[ERROR] Music load is failed";
 		return;
 	}
 	player.play();
 	player.setLoop(true);
-	
 
 	ofBackground(0);
+
+	ofEnableAlphaBlending();
 }
 
 void ofApp::setupGui() {
@@ -38,8 +39,10 @@ void ofApp::setupGui() {
 	visualizationVariables.setName("visualization variables");
 	offsetValue.set("offset", 25, 0, 255);
 	boostValue.set("boost", 128, 0, 500);
-	visualizationVariables.add(boostValue);
+	visualizationChannel.set("channel", 1, 1, 5);
 	visualizationVariables.add(offsetValue);
+	visualizationVariables.add(boostValue);	
+	visualizationVariables.add(visualizationChannel);
 
 	//Add each parameters to gui
 	gui.setup();
@@ -69,6 +72,8 @@ void ofApp::draw(){
 }
 
 void ofApp::drawSyncAmbientColor(float* fftValues, int fftSize) {
+	if (maxValue < minValue) return;
+
 	float maxValueFromFft = 0;
 	for (int i = minValue; i < maxValue; i++) {
 		if (maxValueFromFft < fftValues[i]) maxValueFromFft = fftValues[i];
@@ -81,11 +86,78 @@ void ofApp::drawSyncAmbientColor(float* fftValues, int fftSize) {
 	ofSetColor(0);
 	ofDrawRectangle(0, ofGetHeight() / 2 - rectH * 5.0, ofGetWidth(), rectH * 2.0 * 5.0);
 	//Set Ambient Color
-	ofSetColor( ofColor::fromHsb(calculateColor().getHue(), 255, offsetValue + boostValue * maxValueFromFft));
+	switch (visualizationChannel)
+	{
+	case 1: //Ch.1: Nearly from current implementation
+		ofSetColor(ofColor::fromHsb(calculateColorTimeTransition(true).getHue(), 255, offsetValue + boostValue * maxValueFromFft));
+		break;
+
+	case 2://Ch.2: Nearly from current implementation, but without gradual change
+		ofSetColor(ofColor::fromHsb(calculateColorTimeTransition(false).getHue(), 255, offsetValue + boostValue * maxValueFromFft));
+		break;
+
+	case 3:
+		ofSetColor(ofColor::fromHsb(calculateColorBy2D(fftValues).getHue(), 255, offsetValue + boostValue * maxValueFromFft));
+		break;
+	}	
 	ofDrawRectangle(0, ofGetHeight() / 2 - rectH / 2, ofGetWidth(), rectH);
 }
 
-ofColor ofApp::calculateColor() {
+ofColor ofApp::calculateColorBy2D(float* fftValues) {
+	if (maxValue < minValue) return ofColor(255);
+
+	float range = maxValue - minValue;
+	float unit = range / colorPattern;
+	//cout << "[DEBUG]" << unit << endl;
+
+	array<float, 4> areaBuffers;
+	for (int i = 0; i < areaBuffers.size(); i++) {
+		areaBuffers[i] = 0;
+	}
+
+	cout << "<pre----------------->" << endl;
+	cout << "[DEBUG-0]" << areaBuffers[0] << endl;
+	cout << "[DEBUG-1]" << areaBuffers[1] << endl;
+	cout << "[DEBUG-2]" << areaBuffers[2] << endl;
+	cout << "[DEBUG-3]" << areaBuffers[3] << endl;
+	cout << "<----------------->" << endl;
+	
+	for (int i = minValue; i < maxValue; i++) {
+		for (int j = 0; j < areaBuffers.size(); j++) {
+
+			if ((unit * j + minValue <= i) 
+				&& (i < unit * (j + 1) + minValue)) {
+				//each area process
+				//cout << "[DEBUG]" << j << ":" << i << ":" << fftValues[i] << endl;
+				areaBuffers[j] += fftValues[i] * 2000;
+			}
+		}
+	}
+
+	cout << "<after----------------->" << endl;
+	cout << "[DEBUG-0]" << areaBuffers[0] << endl;
+	cout << "[DEBUG-1]" << areaBuffers[1] << endl;
+	cout << "[DEBUG-2]" << areaBuffers[2] << endl;
+	cout << "[DEBUG-3]" << areaBuffers[3] << endl;
+	cout << "<----------------->" << endl;
+
+	float maxValue = areaBuffers[0];
+	int maxID = 0;
+	for (int i = 0; i < areaBuffers.size(); i++) {
+		//cout << "[INFO] area buffer value in " << i << ": " << areaBuffers[i] << endl;
+		if (maxValue < areaBuffers[i])
+		{
+			maxValue = areaBuffers[i];
+			maxID = i;
+		}
+	}
+
+	ofColor outputColor = colorPresets[maxID];
+
+	return outputColor;
+}
+
+ofColor ofApp::calculateColorTimeTransition(bool enableContinuousTranstion) {
 	float duration = ofGetElapsedTimef() - lastColorChangeTime;
 
 	if (duration > colorChangeInterval) {
@@ -97,14 +169,20 @@ ofColor ofApp::calculateColor() {
 
 	ofColor currentColor = colorPresets[currentColorID];
 
-	int nextColorID = (currentColorID + 1) % colorPattern;
-	ofColor nextColor = colorPresets[nextColorID];
+	if (enableContinuousTranstion) {
+		int nextColorID = (currentColorID + 1) % colorPattern;
+		ofColor nextColor = colorPresets[nextColorID];
 
-	return  ofColor(
-		ofLerp(currentColor.r, nextColor.r, duration / colorChangeInterval * 0.75),
-		ofLerp(currentColor.g, nextColor.g, duration / colorChangeInterval * 0.75),
-		ofLerp(currentColor.b, nextColor.b, duration / colorChangeInterval * 0.75)
-	);
+		return  ofColor(
+			ofLerp(currentColor.r, nextColor.r, duration / colorChangeInterval * 0.75),
+			ofLerp(currentColor.g, nextColor.g, duration / colorChangeInterval * 0.75),
+			ofLerp(currentColor.b, nextColor.b, duration / colorChangeInterval * 0.75)
+		);
+	}
+	else
+	{
+		return currentColor;
+	}
 }
 
 void  ofApp::drawStandardSpectrum(float* fftValues, int fftSize) {
